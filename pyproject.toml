@@ -14,4 +14,6 @@ dependencies = [
     "scikit-learn>=1.7.2",
     "openai-whisper>=20250625",
     "python-multipart>=0.0.20",
+    "gtts>=2.5.4",
+    "pygame>=2.6.1",
 ]

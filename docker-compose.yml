@@ -1,12 +1,103 @@
+version: '3.8'
+
 services:
-  ai-planner:
+  # Основное приложение
+  app:
     build: .
+    container_name: calendar_app
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
-    working_dir: /app  # Добавьте эту строку
     environment:
-      - PYTHONPATH=/app
-      - ENVIRONMENT=development
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DATABASE_URL=postgresql+asyncpg://calendar_user:calendar_pass@postgres:5432/calendar_ai
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:3b
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DEBUG=True
+      - ICAL_BASE_URL=http://localhost:8000/ical
+      - WHISPER_MODEL=base
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    volumes:
+      - ./app:/app/app  # Для hot reload в режиме разработки
+      - ./models:/app/models  # Для Whisper моделей
     restart: unless-stopped
+    networks:
+      - calendar_network
+
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:16-alpine
+    container_name: calendar_postgres
+    environment:
+      POSTGRES_USER: calendar_user
+      POSTGRES_PASSWORD: calendar_pass
+      POSTGRES_DB: calendar_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U calendar_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - calendar_network
+
+  # Redis для кэширования
+  redis:
+    image: redis:7-alpine
+    container_name: calendar_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - calendar_network
+
+  # Ollama для LLM
+  ollama:
+    image: ollama/ollama:latest
+    container_name: calendar_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    restart: unless-stopped
+    networks:
+      - calendar_network
+    # Раскомментируйте для GPU support (NVIDIA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+networks:
+  calendar_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:

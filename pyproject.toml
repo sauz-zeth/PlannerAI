@@ -1,19 +1,75 @@
 [project]
-name = "ai-planner"
+name = "Ai-planner"
 version = "0.1.0"
-description = "Intelligent planner with calendar integration"
+description = "AI-powered calendar management Telegram bot"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.119.1",
-    "uvicorn[standard]>=0.37.0",
-    "pydantic>=2.12.3",
-    "numpy==2.3.4",
-    "torch==2.9.0",
-    "matplotlib>=3.10.7",
-    "scikit-learn>=1.7.2",
-    "openai-whisper>=20250625",
-    "python-multipart>=0.0.20",
-    "gtts>=2.5.4",
-    "pygame>=2.6.1",
+    # FastAPI
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    
+    # Telegram Bot
+    "aiogram>=3.13.0",
+    
+    # Database
+    "sqlalchemy>=2.0.35",
+    "alembic>=1.13.3",
+    "asyncpg>=0.29.0",  # для PostgreSQL
+    # "aiosqlite>=0.20.0",  # альтернатива для SQLite
+    
+    # iCalendar
+    "icalendar>=6.0.1",
+    "recurring-ical-events>=3.3.3",
+    "pytz>=2024.2",
+    
+    # LLM
+    "ollama>=0.4.4",
+    # "llama-cpp-python>=0.3.2",  # альтернатива
+    
+    # Voice processing
+    "faster-whisper>=1.1.0",
+    # "openai-whisper>=20231117",  # альтернатива
+    
+    # Utilities
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.1",
+    "httpx>=0.27.2",
+    "redis>=5.2.0",
+    
+    # Date/Time
+    "python-dateutil>=2.9.0",
+    "arrow>=1.3.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "black>=24.10.0",
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+# toml
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

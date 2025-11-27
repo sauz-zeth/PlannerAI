@@ -11,6 +11,7 @@ on:
       - 'docker-compose.yml'
       - 'backend_service/Dockerfile'
       - '.dockerignore'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:

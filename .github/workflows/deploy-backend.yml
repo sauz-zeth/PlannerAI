@@ -39,22 +39,35 @@ jobs:
               docker build -f backend_service/Dockerfile -t planner-backend .
 
             # Останавливаем и удаляем старый контейнер backend (если запущен)
+            $DOCKER_COMPOSE stop backend 2>/dev/null || true
+            $DOCKER_COMPOSE rm -f backend 2>/dev/null || true
             docker stop planner-backend 2>/dev/null || true
             docker rm planner-backend 2>/dev/null || true
 
-            # Пытаемся запустить через compose, если не получается - запускаем напрямую
-            if $DOCKER_COMPOSE up -d --no-deps backend 2>/dev/null; then
-              echo "Backend started via docker compose"
-            else
-              echo "Starting backend directly via docker run"
-              docker run -d \
-                --name planner-backend \
-                --env-file .env \
-                -p 8000:8000 \
-                --restart unless-stopped \
-                planner-backend
-            fi
+            # Запускаем backend через compose
+            $DOCKER_COMPOSE up -d --no-deps backend
 
-            # Проверяем здоровье сервиса
-            sleep 3
-            curl -f http://localhost:8000/health || exit 1
+            # Ждем запуска и проверяем статус контейнера
+            sleep 5
+
+            # Проверяем логи на ошибки
+            echo "=== Container logs ==="
+            $DOCKER_COMPOSE logs --tail=50 backend || docker logs planner-backend 2>/dev/null || true
+
+            # Проверяем статус контейнера
+            echo "=== Container status ==="
+            $DOCKER_COMPOSE ps backend || docker ps -a | grep planner-backend || true
+
+            # Проверяем здоровье сервиса (несколько попыток)
+            echo "=== Health check ==="
+            for i in {1..5}; do
+              if curl -f http://localhost:8000/health 2>/dev/null; then
+                echo "Backend is healthy!"
+                exit 0
+              fi
+              echo "Attempt $i failed, waiting..."
+              sleep 2
+            done
+
+            echo "Health check failed after 5 attempts"
+            exit 1

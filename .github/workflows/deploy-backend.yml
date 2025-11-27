@@ -12,8 +12,6 @@ on:
       - 'backend_service/Dockerfile'
       - '.dockerignore'
       - '.github/workflows/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
   workflow_dispatch:
 
 jobs:

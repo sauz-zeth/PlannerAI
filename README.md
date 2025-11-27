@@ -1,34 +1,76 @@
-## Телеграм бот с распознаванием голоса и FastAPI-агентом
+## Архитектура
 
-Этот сервис:
+Монорепозитория содержит три компонента:
 
-- **Принимает голосовые сообщения** в Telegram (aiogram, polling).
-- **Транскрибирует аудио в текст** через OpenAI Audio API.
-- **Отправляет текст пользователю** и прогоняет его через минимальный агента.
-- **Поднимает FastAPI-сервис** с эндпоинтом `/agent`, который принимает текст и возвращает ответ агента.
-- **Упакован в Docker** и использует **uv** для управления зависимостями (через `pyproject.toml`).
+- `bot_service` — Telegram-бот (aiogram + локальный Whisper), который распознаёт голос и шлёт текст в backend.
+- `backend_service` — FastAPI-приложение с публичным HTTP API; **оно напрямую вызывает агент как Python-библиотеку**.
+- `agent_service` — модуль с логикой LangGraph/LLM (без собственного HTTP-сервера), который импортируется backend-ом.
 
-### Переменные окружения
+Общие pydantic-схемы лежат в пакете `shared`.
 
-Создайте файл `.env` (или передавайте переменные в Docker):
+## Переменные окружения
+
+Создайте `.env` и заполните минимум:
 
 - `TELEGRAM_BOT_TOKEN` — токен Telegram-бота.
-- `OPENAI_API_KEY` — API-ключ OpenAI (для транскрибации аудио).
+- `BACKEND_SERVICE_URL` — URL backend для бота (по умолчанию `http://127.0.0.1:8000`).
+- `LM_STUDIO_BASE_URL` — URL локального LM Studio (`http://127.0.0.1:1234/v1`).
+- `LM_STUDIO_MODEL` — имя модели в LM Studio (например, `qwen/qwen3-4b-2507`).
 
-### Локальный запуск (через uv)
-
-```bash
-uv sync
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-Бот запустится автоматически вместе с FastAPI-приложением (polling).
-
-### Запуск в Docker
+## Локальный запуск (несколько терминалов)
 
 ```bash
-docker build -t voice-bot .
-docker run --env-file .env -p 8000:8000 voice-bot
+uv sync  # установить зависимости
+
+# 1. Backend (агент вызывается из него напрямую)
+uv run uvicorn backend_service.main:app --host 0.0.0.0 --port 8000
+
+# 2. Бот
+uv run python -m bot_service.main
 ```
 
+Проверка:
+- `GET http://localhost:8000/health` — backend.
+- В Telegram напишите боту голос/текст.
 
+## Docker / docker-compose
+
+Файл `backend_service/Dockerfile` используется для прод-образа backend-а, а `Dockerfile` (в корне) — для бота. `docker-compose.yml` поднимает два контейнера:
+
+```bash
+docker compose up --build
+```
+
+Важно:
+
+- LM Studio должен быть доступен по `http://host.docker.internal:1234/v1` (значение можно переопределить в `.env`).
+- `bot` сервису нужны реальные токены (`TELEGRAM_BOT_TOKEN`).
+
+## Структура каталогов
+
+```
+backend_service/   # FastAPI API (дергает агент как библиотеку)
+agent_service/     # логика LLM (без HTTP сервера)
+bot_service/       # aiogram + Whisper
+shared/            # общие схемы
+docker-compose.yml # оркестрация backend + bot
+
+## Деплой на VPS + домен
+
+1. **DNS**: в панели регистратора создайте A-запись `@` (и при необходимости `www`) на IP `46.151.24.216`. Распространение DNS может занять до часа.
+2. **Клонирование**: на VPS установите git + Docker (и docker compose plugin), выполните `git clone https://.../AI-planner.git && cd AI-planner`.
+3. **.env**: создайте файл `.env` с реальными значениями `TELEGRAM_BOT_TOKEN`, `LM_STUDIO_*` и т.д.
+4. **Запуск**: `docker compose up --build -d` — поднимет backend (порт 8000) и бот.
+5. **Reverse proxy**: установите nginx/caddy/traefik, пробросьте `sauzzeth.ru` на `http://127.0.0.1:8000`. Пример для nginx:
+   ```
+   server {
+       server_name sauzzeth.ru;
+       location / {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+       }
+   }
+   ```
+6. **HTTPS**: подключите Let's Encrypt (например, `certbot --nginx -d sauzzeth.ru`) после настройки nginx.
+```

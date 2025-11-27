@@ -1,27 +1,25 @@
-FROM python:3.12-slim
+# Используем официальный Python образ
+FROM python:3.11-slim
 
-WORKDIR /app
+# Устанавливаем системные зависимости
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Устанавливаем uv
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Копируем структуру проекта
-COPY backend_service/pyproject.toml ./pyproject.toml
-COPY shared ./shared
-COPY agent_service ./agent_service
-COPY backend_service ./backend_service
+# Устанавливаем рабочую директорию
+WORKDIR /app
 
-# Компилируем зависимости в requirements.txt и устанавливаем их
-# requirements.txt создается временно, но зависимости устанавливаются в систему
-RUN uv pip compile pyproject.toml -o /tmp/requirements.txt \
-    && uv pip install --system -r /tmp/requirements.txt \
-    && rm /tmp/requirements.txt
+# Копируем файлы проекта
+COPY . .
 
-ENV PYTHONPATH=/app
+# Устанавливаем зависимости через uv
+RUN uv sync --frozen
 
+# Открываем порт
 EXPOSE 8000
 
-CMD ["uvicorn", "backend_service.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Запускаем приложение
+CMD ["uv", "run", "uvicorn", "backend_service.main:app", "--host", "0.0.0.0", "--port", "8000"]

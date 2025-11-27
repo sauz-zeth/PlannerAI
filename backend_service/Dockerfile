@@ -8,15 +8,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv
 
-# Копируем pyproject.toml и устанавливаем зависимости
-COPY backend_service/pyproject.toml ./
+# Копируем структуру проекта
+COPY backend_service/pyproject.toml ./pyproject.toml
 COPY shared ./shared
 COPY agent_service ./agent_service
 COPY backend_service ./backend_service
 
-# Компилируем и устанавливаем зависимости
-RUN uv pip compile pyproject.toml -o requirements.txt \
-    && uv pip install --system -r requirements.txt
+# Компилируем зависимости в requirements.txt и устанавливаем их
+# requirements.txt создается временно, но зависимости устанавливаются в систему
+RUN uv pip compile pyproject.toml -o /tmp/requirements.txt \
+    && uv pip install --system -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
 
 ENV PYTHONPATH=/app
 

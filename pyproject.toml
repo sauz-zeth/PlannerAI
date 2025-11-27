@@ -17,6 +17,8 @@ dependencies = [
     "pydantic>=2.8.0",
     "openai>=1.0.0",
     "parsedatetime>=2.6",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.0.1",
 ]
 
 [project.optional-dependencies]
@@ -30,7 +32,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["backend_service", "agent_service", "bot_service", "shared"]
 
 
 

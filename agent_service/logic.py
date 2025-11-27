@@ -6,6 +6,8 @@ from typing import Optional
 import parsedatetime as pdt
 from openai import OpenAI
 
+
+# BACKENDO
 # Настройки подключения к локальному LM Studio
 LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
 LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "qwen/qwen3-4b-2507")

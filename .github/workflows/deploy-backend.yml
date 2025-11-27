@@ -45,10 +45,10 @@ jobs:
             git reset --hard origin/backend
             
             # Stop existing containers
-            docker compose down || true
+            docker-compose down || true
             
             # Build and start new containers
-            docker compose up -d --build
+            docker-compose up -d --build
             
             # Clean up old images
             docker image prune -f

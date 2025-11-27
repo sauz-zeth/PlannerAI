@@ -54,23 +54,4 @@ agent_service/     # логика LLM (без HTTP сервера)
 bot_service/       # aiogram + Whisper
 shared/            # общие схемы
 docker-compose.yml # оркестрация backend + bot
-
-## Деплой на VPS + домен
-
-1. **DNS**: в панели регистратора создайте A-запись `@` (и при необходимости `www`) на IP `46.151.24.216`. Распространение DNS может занять до часа.
-2. **Клонирование**: на VPS установите git + Docker (и docker compose plugin), выполните `git clone https://.../AI-planner.git && cd AI-planner`.
-3. **.env**: создайте файл `.env` с реальными значениями `TELEGRAM_BOT_TOKEN`, `LM_STUDIO_*` и т.д.
-4. **Запуск**: `docker compose up --build -d` — поднимет backend (порт 8000) и бот.
-5. **Reverse proxy**: установите nginx/caddy/traefik, пробросьте `sauzzeth.ru` на `http://127.0.0.1:8000`. Пример для nginx:
-   ```
-   server {
-       server_name sauzzeth.ru;
-       location / {
-           proxy_pass http://127.0.0.1:8000;
-           proxy_set_header Host $host;
-           proxy_set_header X-Real-IP $remote_addr;
-       }
-   }
-   ```
-6. **HTTPS**: подключите Let's Encrypt (например, `certbot --nginx -d sauzzeth.ru`) после настройки nginx.
 ```

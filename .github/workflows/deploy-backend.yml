@@ -2,26 +2,14 @@ name: Deploy Backend
 
 on:
   push:
-    branches: ["backend"]
+    branches: ['backend', 'develop/backend']
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Upload to VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "."
-          target: "~/AI-planner"
-
-      - name: Restart services
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -29,4 +17,44 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             cd ~/AI-planner
-            docker-compose restart backend bot
+
+            # Определяем ветку из GitHub ref
+            BRANCH="${{ github.ref_name }}"
+            echo "Deploying branch: $BRANCH"
+
+            # Обновляем код из репозитория
+            git fetch origin
+            git checkout $BRANCH 2>/dev/null || git checkout -b $BRANCH origin/$BRANCH
+            git pull origin $BRANCH
+
+            # Определяем команду docker compose (может быть docker-compose или docker compose)
+            if command -v docker-compose &> /dev/null; then
+              DOCKER_COMPOSE="docker-compose"
+            else
+              DOCKER_COMPOSE="docker compose"
+            fi
+
+            # Собираем backend образ
+            $DOCKER_COMPOSE build backend 2>/dev/null || \
+              docker build -f backend_service/Dockerfile -t planner-backend .
+
+            # Останавливаем и удаляем старый контейнер backend (если запущен)
+            docker stop planner-backend 2>/dev/null || true
+            docker rm planner-backend 2>/dev/null || true
+
+            # Пытаемся запустить через compose, если не получается - запускаем напрямую
+            if $DOCKER_COMPOSE up -d --no-deps backend 2>/dev/null; then
+              echo "Backend started via docker compose"
+            else
+              echo "Starting backend directly via docker run"
+              docker run -d \
+                --name planner-backend \
+                --env-file .env \
+                -p 8000:8000 \
+                --restart unless-stopped \
+                planner-backend
+            fi
+
+            # Проверяем здоровье сервиса
+            sleep 3
+            curl -f http://localhost:8000/health || exit 1

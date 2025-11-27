@@ -12,14 +12,21 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем файлы проекта
-COPY . .
+# Копируем только нужные файлы для backend
+COPY backend_service/ ./backend_service/
+COPY agent_service/ ./agent_service/
+COPY shared/ ./shared/
 
-# Устанавливаем зависимости через uv
-RUN uv sync --frozen
+# Устанавливаем только зависимости для backend (без openai-whisper и aiogram)
+RUN uv pip install --system \
+    fastapi>=0.115.0 \
+    uvicorn[standard]>=0.30.0 \
+    openai>=1.0.0 \
+    parsedatetime>=2.6 \
+    pydantic>=2.8.0
 
 # Открываем порт
 EXPOSE 8000
 
 # Запускаем приложение
-CMD ["uv", "run", "uvicorn", "backend_service.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "backend_service.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,21 @@
+[project]
+name = "ai-planner-vibe-bot"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.13.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.28.1",
+    "openai>=1.0.0",
+    "openai-whisper>=20231117",
+    "parsedatetime>=2.6",
+    "pydantic>=2.8.0",
+    "python-dotenv>=1.0.1",
+    "python-multipart>=0.0.9",
+    "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]

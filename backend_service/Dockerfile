@@ -12,10 +12,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем только нужные файлы для backend
-COPY backend_service/ ./backend_service/
-COPY agent_service/ ./agent_service/
-COPY shared/ ./shared/
+# Копируем backend (ТОЛЬКО app)
+COPY backend_service/app ./app
+
+# agent-service
+COPY agent_service ./agent_service
+
+# shared
+COPY shared ./shared
 
 # Устанавливаем только зависимости для backend (без openai-whisper и aiogram)
 RUN uv pip install --system \

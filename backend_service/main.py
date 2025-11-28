@@ -13,7 +13,7 @@ app = FastAPI(title="AI Planner Backend")
 async def agent_endpoint(payload: AgentPublicRequest) -> AgentPublicResponse:
     """
     Публичная точка входа: вызывает агента как библиотеку внутри того же процесса.
-    ПРИВЕТ МИР!!!!
+    ПРИВЕТ МИР 2.0!!!!
     """
     requested_at = payload.requested_at or datetime.utcnow()
     result = await run_agent(payload.text, requested_at)

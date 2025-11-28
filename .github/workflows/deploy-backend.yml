@@ -6,11 +6,11 @@ on:
       - backend
     paths:
       - 'backend/**'
-      - 'agent/**'
-      - 'shared/**'
       - 'docker-compose.yml'
       - 'backend/Dockerfile'
       - '.dockerignore'
+      - 'pyproject.toml'
+      - 'uv.lock'
       - '.github/workflows/**'
   workflow_dispatch:
 

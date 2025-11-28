@@ -1,8 +1,17 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "backend"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.122.0",
+    "uvicorn[standard]>=0.30.0",
+    "icalendar>=6.3.2",
+    "pydantic>=2.12.5",
     "pytz>=2025.2",
+    "openai>=1.0.0",
+    "parsedatetime>=2.6",
 ]

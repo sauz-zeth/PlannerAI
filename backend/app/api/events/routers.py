@@ -4,7 +4,7 @@ from pydantic import BaseModel
 events_router = APIRouter(tags=["events"])
 
 from app.storage.memory_storage import add_event, get_events
-from shared.schemas import EventCreate
+from app.api.schemas import EventCreate
 
 @events_router.post("/events")
 async def create_event(payload: EventCreate):

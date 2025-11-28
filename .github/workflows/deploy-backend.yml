@@ -5,11 +5,11 @@ on:
     branches:
       - backend
     paths:
-      - 'backend_service/**'
-      - 'agent_service/**'
+      - 'backend/**'
+      - 'agent/**'
       - 'shared/**'
       - 'docker-compose.yml'
-      - 'backend_service/Dockerfile'
+      - 'backend/Dockerfile'
       - '.dockerignore'
       - '.github/workflows/**'
   workflow_dispatch:

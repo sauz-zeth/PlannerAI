@@ -1,6 +1,24 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-planner-postgres
+    environment:
+      POSTGRES_USER: ai_planner
+      POSTGRES_PASSWORD: ai_planner_pass
+      POSTGRES_DB: ai_planner
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_planner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -14,6 +32,10 @@ services:
       - LM_STUDIO_BASE_URL=${LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
       - LM_STUDIO_MODEL=${LM_STUDIO_MODEL:-qwen/qwen3-4b-2507}
       - LM_STUDIO_API_KEY=${LM_STUDIO_API_KEY:-lm-studio}
+      - DATABASE_URL=postgresql+asyncpg://ai_planner:ai_planner_pass@postgres:5432/ai_planner
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
@@ -21,3 +43,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  postgres_data:

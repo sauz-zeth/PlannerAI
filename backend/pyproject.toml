@@ -14,4 +14,13 @@ dependencies = [
     "pytz>=2025.2",
     "openai>=1.0.0",
     "parsedatetime>=2.6",
+    "google-auth>=2.45.0",
+    "google-auth-oauthlib>=1.2.2",
+    "google-auth-httplib2>=0.3.0",
+    "google-api-python-client>=2.187.0",
+    "python-dotenv>=1.0.0",
+    "sqlalchemy>=2.0.45",
+    "asyncpg>=0.29.0",
+    "pyjwt>=2.10.1",
+    "greenlet>=3.3.0",
 ]

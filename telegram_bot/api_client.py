@@ -241,6 +241,15 @@ class APIClient:
             token=token
         )
     
+    async def get_free_blocks(self, token: str, date: str) -> List[Dict[str, Any]]:
+        """Свободные промежутки между событиями за весь день"""
+        return await self._request(
+            "GET",
+            "/calendar/calendar/free-blocks",
+            token=token,
+            params={"date": date},
+        )
+
     async def find_free_slots(
         self,
         token: str,

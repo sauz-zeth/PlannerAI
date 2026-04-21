@@ -333,6 +333,29 @@ async def find_user_free_slots(
                 detail=f"Ошибка при поиске свободных слотов: {error_msg}"
             )
 
+# =========== СВОБОДНЫЕ БЛОКИ ЗА ДЕНЬ ===========
+
+@calendar_router.get(
+    "/free-blocks",
+    summary="Свободные промежутки за день",
+    description="Возвращает свободные промежутки между событиями за весь день (00:00–24:00). "
+                "Пустой список означает, что весь день свободен."
+)
+async def get_free_blocks(
+    date: str = Query(..., description="Дата в формате YYYY-MM-DD"),
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db)
+):
+    try:
+        _validate_date(date)
+        calendar_service = get_calendar_service(current_user["telegram_id"], session)
+        return await calendar_service.get_free_blocks(date)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 # =========== ПОИСК СОБЫТИЙ ПО ТЕКСТУ ===========
 
 @calendar_router.get(

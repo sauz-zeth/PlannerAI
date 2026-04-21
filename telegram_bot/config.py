@@ -12,6 +12,9 @@ if not TELEGRAM_BOT_TOKEN:
 # Backend API
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000")
 
+# OpenAI Whisper (для расшифровки голосовых сообщений)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
 # Проверка наличия обязательных переменных
 if not TELEGRAM_BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN обязателен для работы бота")

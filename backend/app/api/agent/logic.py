@@ -20,36 +20,66 @@ MODEL_NAME = "qwen/qwen3-4b-2507"
 
 # ================== SYSTEM PROMPT ==================
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# Получаем текущую дату
-current_date = datetime.now()
-formatted_date = current_date.strftime("%Y-%m-%d")
 
-SYSTEM_PROMPT = f"""
-Ты агент для управления календарём пользователя.
+def _build_system_prompt() -> str:
+    """Строит системный промпт с актуальной датой на момент запроса."""
+    now = datetime.now()
+    today = now.date()
 
-Текущая дата: {formatted_date}
+    WEEKDAYS_RU = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+    today_name = WEEKDAYS_RU[today.weekday()]
+
+    # Таблица ближайших 14 дней с названиями
+    day_lines = []
+    for i in range(1, 15):
+        d = today + timedelta(days=i)
+        name = WEEKDAYS_RU[d.weekday()]
+        label = ""
+        if i == 1:
+            label = " (завтра)"
+        elif i == 2:
+            label = " (послезавтра)"
+        day_lines.append(f"  {name}: {d.isoformat()}{label}")
+    days_table = "\n".join(day_lines)
+
+    return f"""Ты агент для управления календарём пользователя.
+
+Сегодня: {today.isoformat()} ({today_name})
+
+Ближайшие даты (используй ТОЛЬКО эти значения, не вычисляй сам):
+{days_table}
 
 Правила:
 1. Если запрос связан с календарём — ОБЯЗАТЕЛЬНО вызывай функцию.
 2. Не выдумывай данные.
 3. Не отвечай обычным текстом, если можно вызвать tool.
-4. Все даты и время возвращай в ISO формате с часовым поясом Z: YYYY-MM-DDTHH:MM:SSZ
-5. Для вычисления дат используй ТЕКУЩУЮ ДАТУ: {formatted_date}
-6. "послезавтра" = текущая дата + 2 дня
-7. "завтра" = текущая дата + 1 день
-8. Если время не указано, используй 19:00
-9. Длительность события — 2 часа по умолчанию, если не указано иное
+4. Все даты передавай в формате YYYY-MM-DDTHH:MM:SSZ (UTC = московское время для этого проекта).
+5. Если время не указано — используй 19:00.
+6. Длительность события — 2 часа по умолчанию, если не указано иное.
 
-Примеры для ТЕКУЩЕЙ ДАТЫ {formatted_date}:
-- "создай событие кино послезавтра в 19:00" → 
-  start_time: "2025-12-27T19:00:00Z" (текущая дата 2025-12-25 + 2 дня)
-  end_time: "2025-12-27T21:00:00Z"
-- "создай событие завтра в 15:00" → 
-  start_time: "2025-12-26T15:00:00Z" (текущая дата 2025-12-25 + 1 день)
-  end_time: "2025-12-26T17:00:00Z"
+Выбор инструмента — создание vs поиск свободного времени:
+- create_event: когда пользователь хочет добавить/запланировать/создать дело или событие.
+  Фразы-триггеры: "хочу", "нужно", "надо", "планирую", "собираюсь", "добавь", "создай", "запланируй", "поставь", "занеси", "напомни", "мне нужно".
+  Фраза "прежде чем X", "до X", "перед X" означает только время события — НЕ повод искать слоты.
+  Примеры:
+    "хочу завтра на свидание" → create_event(summary="Свидание", start=завтра19:00, end=завтра21:00)
+    "мне нужно завтра купить молоко" → create_event(summary="Купить молоко", start=завтра19:00, end=завтра21:00)
+    "надо в пятницу позвонить врачу" → create_event(summary="Позвонить врачу", start=пятница19:00, ...)
+    "мне нужно купить молоко прежде чем купить справку" → create_event(summary="Купить молоко", start=завтра19:00, ...)
+- find_free_slots: ТОЛЬКО если пользователь ЯВНО спрашивает про свободное время.
+  Фразы-триггеры: "когда я свободен", "найди свободное время", "есть ли окно", "свободные слоты".
+  НИКОГДА не вызывать find_free_slots когда пользователь описывает задачу или дело!
 
+Выбор инструмента для просмотра событий:
+- get_upcoming_events: когда пользователь спрашивает "ближайшие события" без конкретного периода (hours=168).
+- get_events с time_min + time_max: когда называет конкретный день или период:
+  * "сегодня" → {today.isoformat()}T00:00:00Z .. {today.isoformat()}T23:59:59Z
+  * "завтра" → {(today + timedelta(days=1)).isoformat()}T00:00:00Z .. {(today + timedelta(days=1)).isoformat()}T23:59:59Z
+  * "на этой неделе" → time_min=сегодня, time_max=сегодня+7 дней
+  * "через неделю" → time_min=сегодня+7 дней, time_max=сегодня+14 дней
+  * "в [месяц]" → time_min=начало месяца, time_max=конец месяца
 """
 
 
@@ -68,7 +98,7 @@ async def handle_prompt(
     completion = client.chat.completions.create(
         model=MODEL_NAME,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": _build_system_prompt()},
             {"role": "user", "content": prompt},
         ],
         tools=calendar_tools,
@@ -229,78 +259,52 @@ async def _generate_quick_response(
     if tool_name == "get_upcoming_events" and isinstance(output, list):
         if not output:
             return "🎯 На ближайшее время событий не найдено."
-        
-        events_count = len(output)
-        hours = result["arguments"].get("hours", 24)
-        days = hours // 24 if hours > 24 else 1
-        
-        # Определяем период
-        if days == 1:
-            period = "ближайшие 24 часа"
-        elif days < 7:
-            period = f"ближайшие {days} дня"
-        else:
-            period = f"ближайшие {days} дней"
-        
-        response_lines = [f"📅 Ближайшие события ({period}):", ""]
-        
-        # Группируем события по дням
-        events_by_day = {}
-        for event in output:
-            start_time = event.get('readable_start', '')
-            summary = event.get('summary', 'Без названия')
-            time_to_event = event.get('time_to_event', '')
-            
-            # Извлекаем день из readable_start
-            if "Завтра" in start_time:
-                day_key = "Завтра"
-            elif "Сегодня" in start_time:
-                day_key = "Сегодня"
-            else:
-                # Пытаемся извлечь дату
-                day_key = start_time.split()[0] if start_time else "Неизвестно"
-            
-            if day_key not in events_by_day:
-                events_by_day[day_key] = []
-            
-            events_by_day[day_key].append({
-                'summary': summary,
-                'time': start_time,
-                'time_to_event': time_to_event,
-                'duration': event.get('duration', ''),
-                'location': event.get('location', ''),
-            })
-        
-        # Формируем ответ по дням
-        for day, day_events in events_by_day.items():
-            response_lines.append(f"{day}:")
-            for i, event in enumerate(day_events, 1):
-                line = f"  {i}. {event['summary']}"
-                
-                # Время события
-                if event['time']:
-                    # Извлекаем только время из формата "Завтра в 14:00"
-                    time_part = event['time']
-                    if ' в ' in time_part:
-                        time_part = time_part.split(' в ')[1]
-                    line += f" — {time_part}"
-                
-                # Дополнительная информация
-                details = []
-                if event['duration']:
-                    details.append(f"{event['duration']}")
-                if event['location']:
-                    details.append(f"📍 {event['location']}")
-                
-                if details:
-                    line += f" ({', '.join(details)})"
-                
-                response_lines.append(line)
-            response_lines.append("")  # Пустая строка между днями
-        
-        response_lines.append(f"Всего найдено: {events_count} событий")
-        
-        return "\n".join(response_lines)
+
+        MONTHS = ["января","февраля","марта","апреля","мая","июня",
+                  "июля","августа","сентября","октября","ноября","декабря"]
+        WEEKDAYS = ["пн","вт","ср","чт","пт","сб","вс"]
+
+        def day_header(iso_start: str) -> str:
+            try:
+                from datetime import date as date_cls
+                d_str = iso_start[:10]
+                d = datetime.strptime(d_str, "%Y-%m-%d").date()
+                today = datetime.now().date()
+                wd = WEEKDAYS[d.weekday()]
+                if d == today:
+                    return f"Сегодня, {d.day} {MONTHS[d.month-1]}, {wd}"
+                if (d - today).days == 1:
+                    return f"Завтра, {d.day} {MONTHS[d.month-1]}, {wd}"
+                return f"{d.day} {MONTHS[d.month-1]}, {wd}"
+            except Exception:
+                return iso_start[:10]
+
+        def fmt_time(event: dict) -> str:
+            s = event.get("start", "")
+            e = event.get("end", "")
+            if "T" not in s:
+                return "весь день"
+            return f"{s[11:16]} – {e[11:16]}" if "T" in e else s[11:16]
+
+        # Группируем по дате
+        groups: Dict[str, list] = {}
+        for ev in output:
+            day = ev.get("start", "")[:10]
+            groups.setdefault(day, []).append(ev)
+
+        lines = []
+        for day, evs in groups.items():
+            lines.append(f"📅 {day_header(day)}")
+            for ev in evs:
+                t = fmt_time(ev)
+                title = ev.get("summary", "Без названия")
+                loc = ev.get("location", "")
+                lines.append(f"  {t}  {title}")
+                if loc:
+                    lines.append(f"       📍 {loc}")
+            lines.append("")
+
+        return "\n".join(lines).rstrip()
     
     elif tool_name == "create_event" and isinstance(output, dict):
         summary = output.get('summary', 'Событие')
@@ -308,8 +312,51 @@ async def _generate_quick_response(
         return f"✅ Событие создано: {summary}\n📅 {start_time}"
     
     elif tool_name == "get_events" and isinstance(output, list):
-        count = len(output)
-        return f"📋 Найдено событий: {count}"
+        if not output:
+            return "📭 Событий за этот период не найдено."
+
+        MONTHS = ["января","февраля","марта","апреля","мая","июня",
+                  "июля","августа","сентября","октября","ноября","декабря"]
+        WEEKDAYS = ["пн","вт","ср","чт","пт","сб","вс"]
+
+        def day_header(iso_start: str) -> str:
+            try:
+                d = datetime.strptime(iso_start[:10], "%Y-%m-%d").date()
+                today = datetime.now().date()
+                wd = WEEKDAYS[d.weekday()]
+                if d == today:
+                    return f"Сегодня, {d.day} {MONTHS[d.month-1]}, {wd}"
+                if (d - today).days == 1:
+                    return f"Завтра, {d.day} {MONTHS[d.month-1]}, {wd}"
+                return f"{d.day} {MONTHS[d.month-1]}, {wd}"
+            except Exception:
+                return iso_start[:10]
+
+        def fmt_time(ev: dict) -> str:
+            s = ev.get("start", "")
+            e = ev.get("end", "")
+            if "T" not in s:
+                return "весь день"
+            return f"{s[11:16]} – {e[11:16]}" if "T" in e else s[11:16]
+
+        groups: Dict[str, list] = {}
+        for ev in output:
+            day = ev.get("start", "")[:10]
+            groups.setdefault(day, []).append(ev)
+
+        lines = []
+        for day, evs in groups.items():
+            lines.append(f"📅 {day_header(day)}")
+            for ev in evs:
+                t = fmt_time(ev)
+                title = ev.get("summary", "Без названия")
+                loc = ev.get("location", "")
+                lines.append(f"  {t}  {title}")
+                if loc:
+                    lines.append(f"       📍 {loc}")
+            lines.append("")
+
+        return "\n".join(lines).rstrip()
     
     elif tool_name == "get_calendar_summary" and isinstance(output, dict):
         return (
@@ -319,9 +366,16 @@ async def _generate_quick_response(
             f"• Следующие 24 часа: {output.get('next_24h_events_count', 0)} событий"
         )
     
+    elif tool_name == "update_event" and isinstance(output, dict):
+        title = output.get("summary", "Событие")
+        start = output.get("readable_start") or output.get("start", "")
+        return f"✅ Обновлено: <b>{title}</b>\n📅 {start}"
+
+    elif tool_name == "delete_event":
+        return "🗑️ Событие удалено."
+
     else:
-        # Общий ответ для других инструментов
-        return f"✅ Операция выполнена: {tool_name}"
+        return f"✅ Готово."
 
 # ================== UTILS ==================
 

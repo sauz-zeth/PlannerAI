@@ -443,16 +443,16 @@ class GoogleCalendarService:
             
             # Обновляем время, если указано
             if start_time is not None:
-                timezone = event['start'].get('timeZone', TIMEZONE)
+                tz = event['start'].get('timeZone', TIMEZONE)
                 if 'T' in start_time:
-                    event['start'] = {'dateTime': start_time, 'timeZone': timezone}
+                    event['start'] = {'dateTime': start_time.rstrip('Z'), 'timeZone': tz}
                 else:
                     event['start'] = {'date': start_time}
-            
+
             if end_time is not None:
-                timezone = event['end'].get('timeZone', TIMEZONE)
+                tz = event['end'].get('timeZone', TIMEZONE)
                 if 'T' in end_time:
-                    event['end'] = {'dateTime': end_time, 'timeZone': timezone}
+                    event['end'] = {'dateTime': end_time.rstrip('Z'), 'timeZone': tz}
                 else:
                     event['end'] = {'date': end_time}
             
@@ -808,6 +808,89 @@ class GoogleCalendarService:
             
         except Exception as e:
             raise Exception(f"Ошибка при получении статистики: {e}")
+
+
+    async def get_free_blocks(self, date: str) -> List[Dict]:
+        """
+        Найти свободные промежутки времени за весь день (00:00–24:00).
+
+        Возвращает пустой список если весь день свободен,
+        иначе — список промежутков между событиями.
+        """
+        try:
+            service = await self._get_service()
+
+            time_min = f"{date}T00:00:00Z"
+            time_max = f"{date}T23:59:59Z"
+
+            events_result = service.events().list(
+                calendarId=CALENDAR_ID,
+                timeMin=time_min,
+                timeMax=time_max,
+                singleEvents=True,
+                orderBy="startTime",
+            ).execute()
+
+            events = events_result.get("items", [])
+
+            from datetime import timezone
+
+            day_start = datetime.strptime(f"{date}T00:00:00", "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+            day_end   = datetime.strptime(f"{date}T23:59:59", "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+
+            # Собираем занятые интервалы (только timed events, не all-day)
+            busy: List[tuple] = []
+            for event in events:
+                raw_start = event["start"].get("dateTime")
+                raw_end   = event["end"].get("dateTime")
+                if not raw_start or not raw_end:
+                    # all-day event → весь день занят
+                    return []
+                s = self._parse_datetime(raw_start)
+                e = self._parse_datetime(raw_end)
+                if s and e:
+                    busy.append((s, e))
+
+            if not busy:
+                # Нет событий — весь день свободен
+                return []
+
+            # Сортируем и мёрджим перекрывающиеся интервалы
+            busy.sort(key=lambda x: x[0])
+            merged: List[tuple] = []
+            cs, ce = busy[0]
+            for s, e in busy[1:]:
+                if s <= ce:
+                    ce = max(ce, e)
+                else:
+                    merged.append((cs, ce))
+                    cs, ce = s, e
+            merged.append((cs, ce))
+
+            # Вычисляем свободные промежутки
+            free_blocks = []
+            cursor = day_start
+
+            for bs, be in merged:
+                if cursor < bs:
+                    free_blocks.append({
+                        "start": cursor.strftime("%H:%M"),
+                        "end":   bs.strftime("%H:%M"),
+                    })
+                cursor = max(cursor, be)
+
+            if cursor < day_end:
+                free_blocks.append({
+                    "start": cursor.strftime("%H:%M"),
+                    "end":   "24:00",
+                })
+
+            return free_blocks
+
+        except HttpError as error:
+            raise Exception(f"Ошибка при получении свободных блоков: {error}")
+        except Exception as e:
+            raise Exception(f"Ошибка сервиса: {e}")
 
 
 # Фабрика для создания сервиса

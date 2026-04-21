@@ -95,117 +95,14 @@ async def google_callback(
     # Отмечаем, что пользователь авторизован в Google и готов к подключению Telegram бота
     await mark_telegram_ready(session, tg_id, jwt_token)
 
-    # Показываем страницу успеха
-    success_message = f"""
-        <div style="margin: 30px 0; padding: 25px; background: #e8f5e9; border-radius: 10px; text-align: center;">
-            <h3 style="color: #2e7d32; margin: 0 0 15px 0;">✅ Google Calendar успешно подключён!</h3>
-            <p style="color: #2e7d32; margin: 0 0 20px 0; font-size: 16px;">
-                Вы подключили аккаунт: <strong>{google_email}</strong>
-            </p>
-            <div style="margin: 20px 0; padding: 15px; background: #f1f8e9; border-radius: 8px; text-align: left;">
-                <h4 style="color: #33691e; margin: 0 0 10px 0;">🎯 Что делать дальше:</h4>
-                <ol style="margin: 0; padding-left: 20px; color: #333;">
-                    <li style="margin-bottom: 8px;">Вернитесь в Telegram</li>
-                    <li style="margin-bottom: 8px;">Напишите в чат с ботом команду: <code>/check</code></li>
-                    <li>Бот автоматически подключится к вашему календарю</li>
-                </ol>
-            </div>
-            <div style="margin-top: 25px; padding: 15px; background: #fffde7; border-radius: 8px;">
-                <p style="margin: 0; color: #f57f17; font-size: 14px;">
-                    ⚠️ <strong>Важно:</strong> Закройте эту вкладку после возвращения в Telegram
-                </p>
-            </div>
-        </div>
-    """
-
-    return HTMLResponse(f"""
-    <!DOCTYPE html>
-    <html lang="ru">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>✅ Авторизация успешна</title>
-        <style>
-            body {{
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-                margin: 0;
-            }}
-            .container {{
-                background: white;
-                border-radius: 20px;
-                padding: 40px;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.1);
-                max-width: 500px;
-                width: 100%;
-            }}
-            .success-icon {{
-                font-size: 60px;
-                color: #4CAF50;
-                margin-bottom: 20px;
-            }}
-            .telegram-button {{
-                display: inline-block;
-                background: #0088cc;
-                color: white;
-                text-decoration: none;
-                padding: 15px 30px;
-                border-radius: 10px;
-                font-weight: bold;
-                margin-top: 20px;
-                transition: background 0.3s;
-            }}
-            .telegram-button:hover {{
-                background: #006699;
-            }}
-            .command-box {{
-                background: #f5f5f5;
-                padding: 12px 20px;
-                border-radius: 8px;
-                font-family: 'Courier New', monospace;
-                margin: 10px 0;
-                display: inline-block;
-                border: 2px dashed #ddd;
-            }}
-            @media (max-width: 600px) {{
-                .container {{
-                    padding: 25px;
-                }}
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div style="text-align: center;">
-                <div class="success-icon">✅</div>
-                <h1 style="color: #333; margin: 0 0 10px 0;">Авторизация завершена!</h1>
-                <p style="color: #666; margin: 0 0 30px 0; line-height: 1.6;">
-                    Аккаунт <strong>{google_email}</strong> успешно подключён к Google Calendar
-                </p>
-                
-                {success_message}
-                
-                <div style="margin-top: 30px;">
-                    <div style="color: #666; font-size: 14px; margin-bottom: 15px;">
-                        Перейдите в Telegram и используйте команду:
-                    </div>
-                    <div class="command-box">/check</div>
-                </div>
-                
-                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #999;">
-                    <p style="margin: 5px 0;">Эта страница может быть закрыта</p>
-                    <p style="margin: 5px 0;">Процесс авторизации завершён</p>
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """)
+    return HTMLResponse(
+        "<html><head><meta charset='UTF-8'>"
+        "<script>window.close();</script>"
+        "</head><body>"
+        "<p style='font-family:sans-serif;text-align:center;margin-top:40px'>"
+        "✅ Авторизация успешна. Можно закрыть эту вкладку.</p>"
+        "</body></html>"
+    )
 
 
 @auth_router.post("/refresh")

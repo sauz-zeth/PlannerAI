@@ -23,9 +23,9 @@ PlannerAI connects your Google Calendar to a Telegram bot and exposes a full RES
 ```
 ┌────────────────────────────────────────────────────────────┐
 │                   Telegram Bot                             │
-│  python-telegram-bot  ·  httpx async client               │
+│  python-telegram-bot  ·  httpx async client                │
 │                                                            │
-│  /login  /events  /create_event  /search  /free_slots     │
+│  /login  /events  /create_event  /search  /free_slots      │
 │  /upcoming  /summary  /check  /help  …                     │
 └──────────────────────┬─────────────────────────────────────┘
                        │  HTTP  ·  Bearer JWT
@@ -33,13 +33,13 @@ PlannerAI connects your Google Calendar to a Telegram bot and exposes a full RES
 ┌────────────────────────────────────────────────────────────┐
 │                   FastAPI Backend                          │
 │                                                            │
-│  /auth/*          Google OAuth flow + JWT issuance        │
-│  /calendar/*      CRUD, search, free-slots, summary       │
-│  /agent/prompt    Natural language → LLM → tool calls     │
-│  /public/health   Liveness probe                          │
+│  /auth/*          Google OAuth flow + JWT issuance         │
+│  /calendar/*      CRUD, search, free-slots, summary        │
+│  /agent/prompt    Natural language → LLM → tool calls      │
+│  /public/health   Liveness probe                           │
 │                                                            │
-│  SQLAlchemy async  ·  asyncpg  ·  google-api-python-client│
-└──────┬───────────────────────┬───────────────────────────┘
+│  SQLAlchemy async  ·  asyncpg  ·  google-api-python-client │
+└──────┬───────────────────────┬─────────────────────────────┘
        │                       │
        ▼                       ▼
   PostgreSQL 16          Google Calendar API

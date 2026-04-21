@@ -1,20 +1,73 @@
 # PlannerAI
 
-> An AI-powered calendar assistant that understands natural language. Talk to it like a person — it handles the calendar for you.
+> An AI-powered calendar assistant that understands natural language. Talk to it like a person — it manages your Google Calendar for you.
 
-PlannerAI connects your Google Calendar to a Telegram bot and exposes a full REST API. At its core sits an LLM agent that interprets free-form user requests ("schedule a meeting with the team tomorrow at 3pm", "what do I have this weekend?") and autonomously executes the necessary calendar operations — no rigid command syntax required.
+PlannerAI connects your Google Calendar to a Telegram bot backed by a FastAPI service. An LLM agent interprets free-form requests and executes calendar operations autonomously — no rigid commands needed.
+
+---
+
+## Usage Examples
+
+All interactions happen through plain text or voice in Telegram.
+
+### Viewing events
+
+```
+What do I have tomorrow?
+Show my events for this week
+What's on my schedule in May?
+Do I have anything this Saturday?
+Show upcoming events
+```
+
+### Creating events
+
+```
+Schedule a team meeting tomorrow at 3pm
+Add a workout on Friday from 10:00 to 11:30
+I need to call the doctor on Thursday at noon
+I want to go on a date tomorrow evening
+Plan a movie night next Saturday at 7pm
+```
+
+> Tap **➕ Add event** first and then write even more casually — the bot already knows you want to create something.
+
+### Editing events
+
+Tap **✏️** next to any event in the list, then describe the change:
+
+```
+Move it to Friday at 5pm
+Rename it to Team standup
+Change the time to 18:00
+Add note: bring the report
+```
+
+### Deleting events
+
+Tap **🗑️** next to any event and confirm — or write:
+
+```
+Delete the gym session on Wednesday
+Remove the dentist appointment
+```
+
+### Voice messages
+
+Send a voice message — it is transcribed locally with [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (no third-party API key required) and processed the same as text.
 
 ---
 
 ## Features
 
-- **Natural language agent** — An LLM with function-calling resolves user intent and calls the right calendar operations. Supports LM Studio (local) and any OpenAI-compatible endpoint.
-- **Full Google Calendar CRUD** — Create, read, update, and delete events. Search by text, list upcoming events, get a daily/weekly summary, find free time slots.
-- **Google OAuth 2.0** — Secure delegated access to users' calendars. Tokens are stored server-side; users never share credentials with the bot.
-- **JWT authentication** — The backend issues signed JWT access tokens. The Telegram bot uses them for all subsequent API calls.
-- **Telegram interface** — A fully functional bot with commands for every calendar operation, inline keyboards, and deep-link OAuth initiation.
-- **Async from top to bottom** — FastAPI + SQLAlchemy async + asyncpg. No blocking I/O anywhere in the request path.
-- **Docker-first** — One `docker-compose up` brings up PostgreSQL and the backend. The bot runs separately and only needs `BACKEND_API_URL`.
+- **Natural language agent** — LLM with function-calling resolves user intent and calls the right calendar operation. Supports LM Studio (local) and any OpenAI-compatible endpoint.
+- **Full Google Calendar CRUD** — Create, read, update, and delete events. Search by keyword, list upcoming events, find free time slots.
+- **Single-window UI** — The bot edits one message in place rather than flooding the chat. User messages are deleted after processing.
+- **Voice-to-text** — Local speech recognition via faster-whisper (`small` model, CPU, no API key).
+- **Google OAuth 2.0** — Secure delegated access. Tokens are stored server-side; the user never shares credentials with the bot.
+- **JWT authentication** — The backend issues signed JWT access tokens used for all subsequent API calls.
+- **Async throughout** — FastAPI + SQLAlchemy async + asyncpg. No blocking I/O in the request path.
+- **Docker-first** — `docker-compose up` brings up PostgreSQL and the backend.
 
 ---
 
@@ -23,12 +76,13 @@ PlannerAI connects your Google Calendar to a Telegram bot and exposes a full RES
 ```
 ┌────────────────────────────────────────────────────────────┐
 │                   Telegram Bot                             │
-│  python-telegram-bot  ·  httpx async client                │
+│  python-telegram-bot · httpx async client                  │
+│  faster-whisper (local STT)                                │
 │                                                            │
-│  /login  /events  /create_event  /search  /free_slots      │
-│  /upcoming  /summary  /check  /help  …                     │
+│  Inline keyboard UI  ·  Natural language input             │
+│  Voice messages → transcription → agent                    │
 └──────────────────────┬─────────────────────────────────────┘
-                       │  HTTP  ·  Bearer JWT
+                       │  HTTP · Bearer JWT
                        ▼
 ┌────────────────────────────────────────────────────────────┐
 │                   FastAPI Backend                          │
@@ -38,7 +92,7 @@ PlannerAI connects your Google Calendar to a Telegram bot and exposes a full RES
 │  /agent/prompt    Natural language → LLM → tool calls      │
 │  /public/health   Liveness probe                           │
 │                                                            │
-│  SQLAlchemy async  ·  asyncpg  ·  google-api-python-client │
+│  SQLAlchemy async · asyncpg · google-api-python-client     │
 └──────┬───────────────────────┬─────────────────────────────┘
        │                       │
        ▼                       ▼
@@ -53,43 +107,35 @@ PlannerAI connects your Google Calendar to a Telegram bot and exposes a full RES
 
 ### How the AI agent works
 
-The agent lives in `backend/app/api/agent/`. When a user sends a natural language prompt to `POST /agent/prompt`, the following happens:
+The agent lives in `backend/app/api/agent/`. When a user sends a prompt to `POST /agent/prompt`:
 
-1. The prompt is sent to the LLM together with a set of 7 pre-defined tool schemas (`get_events`, `create_event`, `update_event`, `delete_event`, `find_free_slots`, `search_events`, `get_upcoming_events`, `get_calendar_summary`).
-2. The LLM decides which tool(s) to call and returns structured arguments (e.g. `{"summary": "Team sync", "start_time": "2026-04-22T15:00:00Z", "end_time": "2026-04-22T16:00:00Z"}`).
-3. The backend executes each tool call against the user's Google Calendar.
-4. A final human-readable response is assembled from the tool outputs and returned to the caller.
-
-The system prompt injects today's date so the model can correctly resolve relative expressions like "tomorrow", "this Friday", or "in two weeks".
+1. The prompt is sent to the LLM along with 7 tool schemas: `get_events`, `get_upcoming_events`, `create_event`, `update_event`, `delete_event`, `search_events`, `find_free_slots`.
+2. The system prompt injects today's date and an explicit 14-day calendar so the model resolves relative expressions ("tomorrow", "this Friday") without arithmetic errors.
+3. The LLM picks a tool and returns structured arguments, e.g. `{"summary": "Dentist", "start_time": "2026-04-28T10:00:00Z", "end_time": "2026-04-28T11:00:00Z"}`.
+4. The backend executes the tool call against Google Calendar and returns a human-readable reply.
 
 ### Authentication flow
 
 ```
 User in Telegram
-      │
-      │  /login
+      │  taps "Login with Google"
       ▼
-Bot sends:  GET /auth/login?tg_id=<id>
-      │
+Bot sends URL:  GET /auth/login?tg_id=<id>
       │  302 → Google OAuth consent screen
       ▼
-User grants access in browser
-      │
-      │  Google redirects to /auth/callback?code=…&state=…
+User grants access in browser (tab closes automatically)
+      │  Google redirects to /auth/callback?code=…
       ▼
-Backend exchanges code → Google access + refresh tokens
-Backend saves tokens to DB, mints a JWT, stores it in telegram_status table
-      │
-      │  User returns to Telegram, sends /check
+Backend saves tokens to DB, mints JWT, stores in telegram_status
+      │  User taps "I've authorized"
       ▼
 Bot calls:  GET /auth/telegram-status?telegram_user_id=<id>
-      │
       │  Backend returns JWT
       ▼
-Bot stores JWT in memory → uses it as Bearer token for all future requests
+Bot stores JWT in memory → Bearer token for all future requests
 ```
 
-Google access tokens are refreshed automatically before every Calendar API call if they have expired.
+Google access tokens are refreshed automatically before every Calendar API call.
 
 ---
 
@@ -103,11 +149,12 @@ Google access tokens are refreshed automatically before every Calendar API call 
 | Database driver | asyncpg |
 | Database | PostgreSQL 16 |
 | Google integration | google-api-python-client, google-auth |
-| LLM client | openai SDK (pointed at LM Studio or OpenAI) |
+| LLM client | openai SDK (LM Studio or OpenAI) |
 | Authentication | PyJWT, Google OAuth 2.0 |
 | Telegram bot | python-telegram-bot 21+ |
 | HTTP client (bot) | httpx |
-| Package manager | uv (workspace) |
+| Speech-to-text | faster-whisper (local, CPU) |
+| Package manager | uv (workspace monorepo) |
 | Containerization | Docker + Docker Compose |
 
 ---
@@ -121,7 +168,7 @@ Google access tokens are refreshed automatically before every Calendar API call 
 - Docker & Docker Compose (for PostgreSQL)
 - A Google Cloud project with the Calendar API enabled and OAuth 2.0 credentials
 - A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- LM Studio running locally **or** an OpenAI API key
+- [LM Studio](https://lmstudio.ai/) running locally **or** an OpenAI API key
 
 ### 1. Clone and configure
 
@@ -147,7 +194,6 @@ GOOGLE_REDIRECT_URI=http://localhost:8000/auth/callback
 
 # Telegram
 TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_BOT_USERNAME=your_bot_username
 
 # JWT signing key — any long random string
 SECRET_KEY=your_secret_key
@@ -173,11 +219,9 @@ uv sync
 ./run.sh
 ```
 
-The API will be available at `http://localhost:8000`. Interactive docs: [`/docs`](http://localhost:8000/docs).
+API available at `http://localhost:8000`. Interactive docs at [`/docs`](http://localhost:8000/docs).
 
 ### 4. Start the Telegram bot
-
-In a separate terminal:
 
 ```bash
 cd telegram_bot
@@ -191,13 +235,11 @@ uv sync
 docker-compose up -d
 ```
 
-This starts PostgreSQL and the backend. The Telegram bot is designed to run outside Docker (it only makes HTTP calls to the backend).
+Starts PostgreSQL and the backend. The bot runs outside Docker and only needs `BACKEND_API_URL`.
 
-> **Note:** When running the LLM locally in LM Studio and the backend inside Docker, `LM_STUDIO_BASE_URL` is automatically rewritten to `http://host.docker.internal:1234/v1` by the compose file.
+> **Note:** When the backend runs inside Docker and LM Studio runs on the host, set `LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1` in your compose environment.
 
 ### Database migrations
-
-If you need to apply additive schema changes after pulling updates:
 
 ```bash
 uv run python migration.py
@@ -207,15 +249,15 @@ uv run python migration.py
 
 ## API Reference
 
-All protected endpoints require `Authorization: Bearer <jwt>` header.
+All protected endpoints require `Authorization: Bearer <jwt>`.
 
 ### Auth — `/auth`
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/auth/login?tg_id=` | Initiates Google OAuth flow (redirect) |
+| `GET` | `/auth/login?tg_id=` | Initiates Google OAuth flow |
 | `GET` | `/auth/callback` | OAuth callback — saves tokens, mints JWT |
-| `GET` | `/auth/telegram-status?telegram_user_id=` | Returns JWT for the bot after OAuth completes |
+| `GET` | `/auth/telegram-status?telegram_user_id=` | Returns JWT after OAuth completes |
 | `GET` | `/auth/validate` | Validates the current Bearer token |
 | `POST` | `/auth/refresh` | Issues a new access token from a refresh token |
 
@@ -228,17 +270,18 @@ All protected endpoints require `Authorization: Bearer <jwt>` header.
 | `PUT` | `/calendar/events/{event_id}` | Update an existing event |
 | `DELETE` | `/calendar/events/{event_id}` | Delete an event |
 | `GET` | `/calendar/upcoming` | Events in the next N hours |
-| `GET` | `/calendar/free-slots` | Available time slots for a given date and duration |
+| `GET` | `/calendar/free-slots` | Available slots for a given date and duration |
+| `GET` | `/calendar/free-blocks` | Continuous free blocks for a given date |
 | `GET` | `/calendar/search?q=` | Full-text search across events |
-| `GET` | `/calendar/summary` | Today/tomorrow event counts and next upcoming event |
+| `GET` | `/calendar/summary` | Today/tomorrow event counts |
 
 ### Agent — `/agent` 🔒
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/agent/prompt` | Send a natural language request; get a calendar action + human-readable reply |
+| `POST` | `/agent/prompt` | Natural language request → calendar action + reply |
 
-**Example request:**
+**Example:**
 
 ```bash
 curl -X POST http://localhost:8000/agent/prompt \
@@ -247,47 +290,12 @@ curl -X POST http://localhost:8000/agent/prompt \
   -d '{"prompt": "Schedule a dentist appointment next Monday at 10am for an hour"}'
 ```
 
-**Example response:**
-
 ```json
 {
   "type": "text",
   "content": "✅ Event created: Dentist appointment\n📅 Monday, 27 April at 10:00"
 }
 ```
-
-### Public — `/public`
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/public/health` | Liveness check |
-
----
-
-## Telegram Bot Commands
-
-### Authentication
-| Command | Description |
-|---|---|
-| `/start` | Welcome message |
-| `/login` | Begin Google Calendar authorization |
-| `/check` | Confirm authorization and retrieve JWT |
-
-### Calendar
-| Command | Description |
-|---|---|
-| `/events [n]` | Show the next N events (default: 5) |
-| `/upcoming [hours]` | Events in the next N hours |
-| `/summary` | Today and tomorrow at a glance |
-| `/create_event <title> <start> <end> [description]` | Create an event (`2026-04-22T14:00:00`) |
-| `/search <query>` | Find events by keyword |
-| `/free_slots [date] [duration_min]` | Find open slots on a given day |
-
-### Misc
-| Command | Description |
-|---|---|
-| `/status` | Show connection status |
-| `/help` | List all commands |
 
 ---
 
@@ -306,7 +314,7 @@ PlannerAI/
 │   └── pyproject.toml
 ├── telegram_bot/
 │   ├── bot.py              # Application setup, handler registration
-│   ├── handlers.py         # Command implementations
+│   ├── handlers.py         # All bot logic: single-window UI, agent calls, STT
 │   ├── api_client.py       # Async HTTP client for the backend
 │   └── pyproject.toml
 ├── migration.py            # Additive schema migrations
@@ -319,12 +327,10 @@ PlannerAI/
 
 ## Google Cloud Setup
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Library**
-2. Enable **Google Calendar API**
-3. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
-4. Application type: **Web application**
-5. Add `http://localhost:8000/auth/callback` to **Authorized redirect URIs**
-6. Copy the **Client ID** and **Client Secret** into `.env`
+1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Library** → enable **Google Calendar API**
+2. **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID** → **Web application**
+3. Add `http://localhost:8000/auth/callback` to **Authorized redirect URIs**
+4. Copy **Client ID** and **Client Secret** into `.env`
 
 ---
 
